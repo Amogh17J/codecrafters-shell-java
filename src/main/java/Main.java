@@ -394,6 +394,50 @@ if (parts.get(i).equals("2>")) {
 
                     writer.close();
                     reader.close();
+                    if (errorFile == null) {
+
+    String errLine;
+
+    while ((errLine = errReader.readLine()) != null) {
+        System.out.println(errLine);
+    }
+
+} else {
+
+    File errFile;
+
+    if (new File(errorFile).isAbsolute()) {
+        errFile = new File(errorFile);
+    } else {
+        errFile = new File(currentDirectory, errorFile);
+    }
+
+    File parent = errFile.getParentFile();
+
+    if (parent != null) {
+        parent.mkdirs();
+    }
+
+    BufferedWriter errWriter =
+            new BufferedWriter(
+                    new FileWriter(errFile, false));
+
+    String errLine;
+
+    boolean first = true;
+
+    while ((errLine = errReader.readLine()) != null) {
+
+        if (!first) {
+            errWriter.newLine();
+        }
+
+        errWriter.write(errLine);
+        first = false;
+    }
+
+    errWriter.close();
+}
                     
                     BufferedReader errReader = new BufferedReader(
                             new InputStreamReader(process.getErrorStream()));
