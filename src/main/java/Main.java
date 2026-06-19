@@ -52,7 +52,7 @@ public class Main {
                     }
                 }
             }
-            else if(command.equals("pwd")){
+            else if(command.startsWith("pwd")){
                 System.out.println(System.getProperty("user.dir"));
             }
 
