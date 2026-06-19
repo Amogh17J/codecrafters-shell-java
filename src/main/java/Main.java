@@ -11,7 +11,7 @@ public class Main {
 
             String command = sc.nextLine();
 
-            if (command.equals("exit 0")) {
+            if (command.equals("exit 0") || command.equals("exit")) {
                 break;
             }
 
