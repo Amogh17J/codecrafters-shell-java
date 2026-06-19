@@ -323,13 +323,9 @@ public class Main {
 
                     try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, append))) {
                         String line;
-                        boolean first = true;
                         while ((line = stdoutReader.readLine()) != null) {
-                            if (!first) {
-                                writer.newLine();
-                            }
                             writer.write(line);
-                            first = false;
+                            writer.newLine();
                         }
                     }
                 } else {
@@ -356,13 +352,9 @@ public class Main {
 
                     try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, append))) {
                         String errLine;
-                        boolean first = true;
                         while ((errLine = stderrReader.readLine()) != null) {
-                            if (!first) {
-                                errWriter.newLine();
-                            }
                             errWriter.write(errLine);
-                            first = false;
+                            errWriter.newLine();
                         }
                     }
                 } else {
