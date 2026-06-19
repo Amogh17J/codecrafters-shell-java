@@ -12,6 +12,15 @@ public class Main {
     boolean inDoubleQuote = false;
 
     for (int i = 0; i < input.length(); i++) {
+        if (!inSingleQuote && !inDoubleQuote && ch == '\\') {
+
+    if (i + 1 < input.length()) {
+        current.append(input.charAt(i + 1));
+        i++;
+    }
+
+    continue;
+}
 
         char ch = input.charAt(i);
 
