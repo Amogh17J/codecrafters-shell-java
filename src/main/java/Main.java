@@ -25,8 +25,12 @@ public class Main {
             }
 
           else if(command.startsWith("cd ")) {
+            
 
     String path = command.substring(3);
+    if(path.equals("~")) {
+    path = System.getenv("HOME");
+}
 
     File target;
 
