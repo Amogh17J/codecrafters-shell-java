@@ -24,25 +24,28 @@ public class Main {
                 System.out.println(currentDirectory.getAbsolutePath());
             }
 
-            else if (command.startsWith("cd ")) {
+          else if(command.startsWith("cd ")) {
 
-                String path = command.substring(3);
+    String path = command.substring(3);
 
-                File target;
-                if (path.startsWith("/")) {
-                    target = new File(path);       
-                } 
-                else {
-                    target = new File(currentDirectory, path);
-                }
+    File target;
 
-                if (target.exists() && target.isDirectory()) {
-                    currentDirectory = target;
-                } else {
-                    System.out.println(
-                            "cd: " + path + ": No such file or directory");
-                }
-            }
+    if(path.startsWith("/")) {
+        target = new File(path);
+    } else {
+        target = new File(currentDirectory, path);
+    }
+
+    target = target.getCanonicalFile();
+
+    if(target.exists() && target.isDirectory()) {
+        currentDirectory = target;
+    } else {
+        System.out.println(
+            "cd: " + path + ": No such file or directory"
+        );
+    }
+}
 
             else if (command.startsWith("echo ")) {
                 System.out.println(command.substring(5));
