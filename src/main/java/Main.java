@@ -15,12 +15,30 @@ public class Main {
         char ch = input.charAt(i);
         if (!inSingleQuote && !inDoubleQuote && ch == '\\') {
 
-        if (i + 1 < input.length()) {
-            current.append(input.charAt(i + 1));
-            i++;
-        }
-        continue;
+    if (i + 1 < input.length()) {
+        current.append(input.charAt(i + 1));
+        i++;
     }
+
+    continue;
+}
+
+if (inDoubleQuote && ch == '\\') {
+
+    if (i + 1 < input.length()) {
+
+        char next = input.charAt(i + 1);
+
+        if (next == '"' || next == '\\') {
+            current.append(next);
+            i++;
+            continue;
+        }
+    }
+
+    current.append(ch);
+    continue;
+}
 
         if (ch == '\'' && !inDoubleQuote) {
             inSingleQuote = !inSingleQuote;
