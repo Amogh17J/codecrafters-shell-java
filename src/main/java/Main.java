@@ -125,27 +125,37 @@ public class Main {
                 List<String> tokens = parseCommand(command);
                 StringBuilder output = new StringBuilder();
                 String outputFile = null;
+                String errorFile = null;
+                int redirectIndex = tokens.size();
 
                 for (int i = 1; i < tokens.size(); i++) {
-                    if (tokens.get(i).equals(">") || tokens.get(i).equals("1>")) {
-                        if (i + 1 < tokens.size()) {
-                            outputFile = tokens.get(i + 1);
-                        }
+                    String tok = tokens.get(i);
+                    if (tok.equals(">") || tok.equals("1>") || tok.equals("2>")) {
+                        redirectIndex = i;
                         break;
                     }
                 }
 
-                for (int i = 1; i < tokens.size(); i++) {
-                    if (tokens.get(i).equals(">") || tokens.get(i).equals("1>")) {
-                        break;
+                // Scan all redirect tokens after redirectIndex (handles ">" and "2>" together)
+                for (int i = redirectIndex; i < tokens.size(); i++) {
+                    String tok = tokens.get(i);
+                    if ((tok.equals(">") || tok.equals("1>")) && i + 1 < tokens.size()) {
+                        outputFile = tokens.get(i + 1);
+                        i++;
+                    } else if (tok.equals("2>") && i + 1 < tokens.size()) {
+                        errorFile = tokens.get(i + 1);
+                        i++;
                     }
+                }
 
+                for (int i = 1; i < redirectIndex; i++) {
                     if (i > 1) {
                         output.append(" ");
                     }
                     output.append(tokens.get(i));
                 }
 
+                // Handle stdout: either print to terminal or write to file
                 if (outputFile == null) {
                     System.out.println(output);
                 } else {
@@ -164,6 +174,28 @@ public class Main {
                     try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, false))) {
                         writer.write(output.toString());
                         writer.newLine();
+                    } catch (IOException e) {
+                        System.out.println("echo: " + e.getMessage());
+                    }
+                }
+
+                // Handle stderr redirect: echo never writes to stderr,
+                // but the target file must still be created/truncated.
+                if (errorFile != null) {
+                    File errFile;
+                    if (new File(errorFile).isAbsolute()) {
+                        errFile = new File(errorFile);
+                    } else {
+                        errFile = new File(currentDirectory, errorFile);
+                    }
+
+                    File parent = errFile.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+
+                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, false))) {
+                        // nothing to write; echo produces no stderr output
                     } catch (IOException e) {
                         System.out.println("echo: " + e.getMessage());
                     }
