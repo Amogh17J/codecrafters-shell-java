@@ -24,9 +24,7 @@ public class Main {
 
                 continue;
             }
-
             if (inDoubleQuote && ch == '\\') {
-
                 if (i + 1 < input.length()) {
 
                     char next = input.charAt(i + 1);
@@ -53,18 +51,24 @@ public class Main {
             }
 
             if (!inSingleQuote
-                    && !inDoubleQuote
-                    && ch == '>') {
+        && !inDoubleQuote
+        && ch == '>') {
 
-                if (current.length() > 0) {
-                    tokens.add(current.toString());
-                    current.setLength(0);
-                }
+    if (current.toString().equals("1")) {
+        current.setLength(0);
+        tokens.add("1>");
+        continue;
+    }
 
-                tokens.add(">");
+    if (current.length() > 0) {
+        tokens.add(current.toString());
+        current.setLength(0);
+    }
 
-                continue;
-            }
+    tokens.add(">");
+
+    continue;
+}
 
             if (Character.isWhitespace(ch)
                     && !inSingleQuote
@@ -180,8 +184,9 @@ public class Main {
                     }
 
                     try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, false))) {
-                        writer.write(output.toString());
-                    } catch (IOException e) {
+    writer.write(output.toString());
+    writer.newLine();
+} catch (IOException e) {
                         System.out.println("echo: " + e.getMessage());
                     }
                 }
