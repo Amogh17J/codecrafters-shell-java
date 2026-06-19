@@ -25,7 +25,8 @@ public class Main {
 
                 if (cmd.equals("echo")
                         || cmd.equals("exit")
-                        || cmd.equals("type")) {
+                        || cmd.equals("type")
+                        || cmd.equals("pwd")) {
 
                     System.out.println(cmd + " is a shell builtin");
                 } else {
