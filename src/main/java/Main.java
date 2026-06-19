@@ -276,12 +276,23 @@ public class Main {
 
                 } else {
 
-                    File outFile =
-                            new File(currentDirectory, outputFile);
+                    File outFile;
 
-                    BufferedWriter writer =
-                            new BufferedWriter(
-                                    new FileWriter(outFile, false));
+if (new File(outputFile).isAbsolute()) {
+    outFile = new File(outputFile);
+} else {
+    outFile = new File(currentDirectory, outputFile);
+}
+
+File parent = outFile.getParentFile();
+
+if (parent != null) {
+    parent.mkdirs();
+}
+
+BufferedWriter writer =
+        new BufferedWriter(
+                new FileWriter(outFile, false));
 
                     BufferedReader reader =
                             new BufferedReader(
