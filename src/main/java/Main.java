@@ -28,7 +28,13 @@ public class Main {
 
                 String path = command.substring(3);
 
-                File target = new File(path);
+                File target;
+                if (path.startsWith("/")) {
+                    target = new File(path);       
+                } 
+                else {
+                    target = new File(currentDirectory, path);
+                }
 
                 if (target.exists() && target.isDirectory()) {
                     currentDirectory = target;
