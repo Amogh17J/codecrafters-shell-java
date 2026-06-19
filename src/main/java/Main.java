@@ -44,15 +44,19 @@ public class Main {
             }
 
             if (!inSingleQuote && !inDoubleQuote && ch == '>') {
+                boolean isAppend = (i + 1 < input.length() && input.charAt(i + 1) == '>');
+
                 if (current.toString().equals("1")) {
                     current.setLength(0);
-                    tokens.add("1>");
+                    tokens.add(isAppend ? "1>>" : "1>");
+                    if (isAppend) i++;
                     continue;
                 }
 
                 if (current.toString().equals("2")) {
                     current.setLength(0);
-                    tokens.add("2>");
+                    tokens.add(isAppend ? "2>>" : "2>");
+                    if (isAppend) i++;
                     continue;
                 }
 
@@ -61,7 +65,8 @@ public class Main {
                     current.setLength(0);
                 }
 
-                tokens.add(">");
+                tokens.add(isAppend ? ">>" : ">");
+                if (isAppend) i++;
                 continue;
             }
 
@@ -126,24 +131,30 @@ public class Main {
                 StringBuilder output = new StringBuilder();
                 String outputFile = null;
                 String errorFile = null;
+                boolean appendOut = false;
+                boolean appendErr = false;
                 int redirectIndex = tokens.size();
 
                 for (int i = 1; i < tokens.size(); i++) {
                     String tok = tokens.get(i);
-                    if (tok.equals(">") || tok.equals("1>") || tok.equals("2>")) {
+                    if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")
+                            || tok.equals("2>") || tok.equals("2>>")) {
                         redirectIndex = i;
                         break;
                     }
                 }
 
-                // Scan all redirect tokens after redirectIndex (handles ">" and "2>" together)
+                // Scan all redirect tokens after redirectIndex (handles stdout and stderr together)
                 for (int i = redirectIndex; i < tokens.size(); i++) {
                     String tok = tokens.get(i);
-                    if ((tok.equals(">") || tok.equals("1>")) && i + 1 < tokens.size()) {
+                    if ((tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>"))
+                            && i + 1 < tokens.size()) {
                         outputFile = tokens.get(i + 1);
+                        appendOut = tok.equals(">>") || tok.equals("1>>");
                         i++;
-                    } else if (tok.equals("2>") && i + 1 < tokens.size()) {
+                    } else if ((tok.equals("2>") || tok.equals("2>>")) && i + 1 < tokens.size()) {
                         errorFile = tokens.get(i + 1);
+                        appendErr = tok.equals("2>>");
                         i++;
                     }
                 }
@@ -171,7 +182,7 @@ public class Main {
                         parent.mkdirs();
                     }
 
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, false))) {
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, appendOut))) {
                         writer.write(output.toString());
                         writer.newLine();
                     } catch (IOException e) {
@@ -180,7 +191,7 @@ public class Main {
                 }
 
                 // Handle stderr redirect: echo never writes to stderr,
-                // but the target file must still be created/truncated.
+                // but the target file must still be created (or left untouched if appending).
                 if (errorFile != null) {
                     File errFile;
                     if (new File(errorFile).isAbsolute()) {
@@ -194,7 +205,7 @@ public class Main {
                         parent.mkdirs();
                     }
 
-                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, false))) {
+                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, appendErr))) {
                         // nothing to write; echo produces no stderr output
                     } catch (IOException e) {
                         System.out.println("echo: " + e.getMessage());
@@ -238,21 +249,25 @@ public class Main {
                 String outputFile = null;
                 String errorFile = null;
                 String redirectType = null;
+                boolean append = false;
 
                 for (int i = 0; i < parts.size(); i++) {
-                    if (parts.get(i).equals(">") || parts.get(i).equals("1>")) {
+                    String tok = parts.get(i);
+                    if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")) {
                         if (i + 1 < parts.size()) {
                             outputFile = parts.get(i + 1);
                         }
                         redirectType = "stdout";
+                        append = tok.equals(">>") || tok.equals("1>>");
                         parts = new ArrayList<>(parts.subList(0, i));
                         break;
                     }
-                    if (parts.get(i).equals("2>")) {
+                    if (tok.equals("2>") || tok.equals("2>>")) {
                         if (i + 1 < parts.size()) {
                             errorFile = parts.get(i + 1);
                         }
                         redirectType = "stderr";
+                        append = tok.equals("2>>");
                         parts = new ArrayList<>(parts.subList(0, i));
                         break;
                     }
@@ -306,7 +321,7 @@ public class Main {
                         parent.mkdirs();
                     }
 
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, false))) {
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, append))) {
                         String line;
                         boolean first = true;
                         while ((line = stdoutReader.readLine()) != null) {
@@ -339,7 +354,7 @@ public class Main {
                         parent.mkdirs();
                     }
 
-                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, false))) {
+                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, append))) {
                         String errLine;
                         boolean first = true;
                         while ((errLine = stderrReader.readLine()) != null) {
