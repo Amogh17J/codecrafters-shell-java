@@ -296,6 +296,10 @@ public class Main {
                 pb.directory(currentDirectory);
 
                 Process process = pb.start();
+                BufferedReader errReader =
+        new BufferedReader(
+                new InputStreamReader(
+                        process.getErrorStream()));
 
                 if (outputFile == null) {
 
