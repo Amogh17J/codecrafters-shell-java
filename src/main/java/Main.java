@@ -5,71 +5,73 @@ public class Main {
 
     private static List<String> parseCommand(String input) {
 
-    List<String> tokens = new ArrayList<>();
-    StringBuilder current = new StringBuilder();
+        List<String> tokens = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
 
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
 
-    for (int i = 0; i < input.length(); i++) {
-        char ch = input.charAt(i);
-        if (!inSingleQuote && !inDoubleQuote && ch == '\\') {
+        for (int i = 0; i < input.length(); i++) {
 
-    if (i + 1 < input.length()) {
-        current.append(input.charAt(i + 1));
-        i++;
-    }
+            char ch = input.charAt(i);
 
-    continue;
-}
+            if (!inSingleQuote && !inDoubleQuote && ch == '\\') {
 
-if (inDoubleQuote && ch == '\\') {
+                if (i + 1 < input.length()) {
+                    current.append(input.charAt(i + 1));
+                    i++;
+                }
 
-    if (i + 1 < input.length()) {
-
-        char next = input.charAt(i + 1);
-
-        if (next == '"' || next == '\\') {
-            current.append(next);
-            i++;
-            continue;
-        }
-    }
-
-    current.append(ch);
-    continue;
-}
-
-        if (ch == '\'' && !inDoubleQuote) {
-            inSingleQuote = !inSingleQuote;
-            continue;
-        }
-
-        if (ch == '"' && !inSingleQuote) {
-            inDoubleQuote = !inDoubleQuote;
-            continue;
-        }
-
-        if (Character.isWhitespace(ch)
-                && !inSingleQuote
-                && !inDoubleQuote) {
-
-            if (current.length() > 0) {
-                tokens.add(current.toString());
-                current.setLength(0);
+                continue;
             }
 
-        } else {
-            current.append(ch);
+            if (inDoubleQuote && ch == '\\') {
+
+                if (i + 1 < input.length()) {
+
+                    char next = input.charAt(i + 1);
+
+                    if (next == '"' || next == '\\') {
+                        current.append(next);
+                        i++;
+                        continue;
+                    }
+                }
+
+                current.append(ch);
+                continue;
+            }
+
+            if (ch == '\'' && !inDoubleQuote) {
+                inSingleQuote = !inSingleQuote;
+                continue;
+            }
+
+            if (ch == '"' && !inSingleQuote) {
+                inDoubleQuote = !inDoubleQuote;
+                continue;
+            }
+
+            if (Character.isWhitespace(ch)
+                    && !inSingleQuote
+                    && !inDoubleQuote) {
+
+                if (current.length() > 0) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+
+            } else {
+                current.append(ch);
+            }
         }
-    }
 
-    if (current.length() > 0) {
-        tokens.add(current.toString());
-    }
+        if (current.length() > 0) {
+            tokens.add(current.toString());
+        }
 
-    return tokens;
-}
+        return tokens;
+    }
 
     public static void main(String[] args) throws Exception {
 
@@ -161,7 +163,7 @@ if (inDoubleQuote && ch == '\\') {
 
                         File file = new File(dir, cmd);
 
-                        if (file.exists() && file.canExecute()) {
+                        if (file.isFile() && file.canExecute()) {
 
                             System.out.println(
                                     cmd + " is "
@@ -197,7 +199,7 @@ if (inDoubleQuote && ch == '\\') {
 
                     File file = new File(dir, cmd);
 
-                    if (file.exists() && file.canExecute()) {
+                    if (file.isFile() && file.canExecute()) {
                         executable = file;
                         break;
                     }
@@ -212,7 +214,11 @@ if (inDoubleQuote && ch == '\\') {
                 List<String> commandList =
                         new ArrayList<>();
 
-                commandList.addAll(parts);
+                commandList.add(executable.getAbsolutePath());
+
+                for (int i = 1; i < parts.size(); i++) {
+                    commandList.add(parts.get(i));
+                }
 
                 ProcessBuilder pb =
                         new ProcessBuilder(commandList);
