@@ -52,6 +52,9 @@ public class Main {
                     }
                 }
             }
+            else if(command.equals("pwd")){
+                System.out.println(System.getProperty("user.dir"));
+            }
 
             else {
 
@@ -78,10 +81,9 @@ public class Main {
                 }
 
                 List<String> commandList = new ArrayList<>();
-
-for (String part : parts) {
-    commandList.add(part);
-}
+                for (String part : parts) {
+                    commandList.add(part);
+                }
 
                 ProcessBuilder pb = new ProcessBuilder(commandList);
 
