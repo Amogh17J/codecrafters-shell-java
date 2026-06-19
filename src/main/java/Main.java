@@ -52,6 +52,20 @@ public class Main {
                 continue;
             }
 
+            if (!inSingleQuote
+                    && !inDoubleQuote
+                    && ch == '>') {
+
+                if (current.length() > 0) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+
+                tokens.add(">");
+
+                continue;
+            }
+
             if (Character.isWhitespace(ch)
                     && !inSingleQuote
                     && !inDoubleQuote) {
@@ -128,6 +142,10 @@ public class Main {
 
                 for (int i = 1; i < tokens.size(); i++) {
 
+                    if (tokens.get(i).equals(">")) {
+                        break;
+                    }
+
                     if (i > 1) {
                         output.append(" ");
                     }
@@ -188,6 +206,26 @@ public class Main {
                     continue;
                 }
 
+                String outputFile = null;
+
+                for (int i = 0; i < parts.size(); i++) {
+
+                    if (parts.get(i).equals(">") ||
+                        parts.get(i).equals("1>")) {
+
+                        if (i + 1 < parts.size()) {
+                            outputFile = parts.get(i + 1);
+                        }
+
+                        parts = new ArrayList<>(parts.subList(0, i));
+                        break;
+                    }
+                }
+
+                if (parts.isEmpty()) {
+                    continue;
+                }
+
                 String cmd = parts.get(0);
 
                 String path = System.getenv("PATH");
@@ -212,9 +250,9 @@ public class Main {
                 }
 
                 List<String> commandList =
-        new ArrayList<>();
+                        new ArrayList<>();
 
-commandList.addAll(parts);
+                commandList.addAll(parts);
 
                 ProcessBuilder pb =
                         new ProcessBuilder(commandList);
@@ -223,15 +261,48 @@ commandList.addAll(parts);
 
                 Process process = pb.start();
 
-                BufferedReader reader =
-                        new BufferedReader(
-                                new InputStreamReader(
-                                        process.getInputStream()));
+                if (outputFile == null) {
 
-                String line;
+                    BufferedReader reader =
+                            new BufferedReader(
+                                    new InputStreamReader(
+                                            process.getInputStream()));
 
-                while ((line = reader.readLine()) != null) {
-                    System.out.println(line);
+                    String line;
+
+                    while ((line = reader.readLine()) != null) {
+                        System.out.println(line);
+                    }
+
+                } else {
+
+                    File outFile =
+                            new File(currentDirectory, outputFile);
+
+                    BufferedWriter writer =
+                            new BufferedWriter(
+                                    new FileWriter(outFile, false));
+
+                    BufferedReader reader =
+                            new BufferedReader(
+                                    new InputStreamReader(
+                                            process.getInputStream()));
+
+                    String line;
+
+                    boolean first = true;
+
+                    while ((line = reader.readLine()) != null) {
+
+                        if (!first) {
+                            writer.newLine();
+                        }
+
+                        writer.write(line);
+                        first = false;
+                    }
+
+                    writer.close();
                 }
 
                 process.waitFor();
