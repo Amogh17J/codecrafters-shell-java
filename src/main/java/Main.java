@@ -5,39 +5,46 @@ public class Main {
 
     private static List<String> parseCommand(String input) {
 
-        List<String> tokens = new ArrayList<>();
+    List<String> tokens = new ArrayList<>();
+    StringBuilder current = new StringBuilder();
 
-        StringBuilder current = new StringBuilder();
+    boolean inSingleQuote = false;
+    boolean inDoubleQuote = false;
 
-        boolean inSingleQuote = false;
+    for (int i = 0; i < input.length(); i++) {
 
-        for (int i = 0; i < input.length(); i++) {
+        char ch = input.charAt(i);
 
-            char ch = input.charAt(i);
-
-            if (ch == '\'') {
-                inSingleQuote = !inSingleQuote;
-                continue;
-            }
-
-            if (Character.isWhitespace(ch) && !inSingleQuote) {
-
-                if (current.length() > 0) {
-                    tokens.add(current.toString());
-                    current.setLength(0);
-                }
-
-            } else {
-                current.append(ch);
-            }
+        if (ch == '\'' && !inDoubleQuote) {
+            inSingleQuote = !inSingleQuote;
+            continue;
         }
 
-        if (current.length() > 0) {
-            tokens.add(current.toString());
+        if (ch == '"' && !inSingleQuote) {
+            inDoubleQuote = !inDoubleQuote;
+            continue;
         }
 
-        return tokens;
+        if (Character.isWhitespace(ch)
+                && !inSingleQuote
+                && !inDoubleQuote) {
+
+            if (current.length() > 0) {
+                tokens.add(current.toString());
+                current.setLength(0);
+            }
+
+        } else {
+            current.append(ch);
+        }
     }
+
+    if (current.length() > 0) {
+        tokens.add(current.toString());
+    }
+
+    return tokens;
+}
 
     public static void main(String[] args) throws Exception {
 
