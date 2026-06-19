@@ -277,6 +277,14 @@ public class Main {
 
                     writer.close();
                     reader.close();
+                    // Add this code after line 257:
+BufferedReader errReader = new BufferedReader(
+        new InputStreamReader(process.getErrorStream()));
+String errLine;
+while ((errLine = errReader.readLine()) != null) {
+    System.err.println(errLine);
+}
+errReader.close();
                 }
 
                 process.waitFor();
