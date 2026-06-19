@@ -1,76 +1,303 @@
-import java.util.*;
 import java.io.*;
+import java.util.*;
 
 public class Main {
 
-    private static List<String> parseCommand(String input) {
+    private static final Set<String> BUILTINS =
+            new HashSet<>(Arrays.asList("exit", "echo", "type", "pwd", "cd"));
+
+    private static final BufferedReader reader =
+            new BufferedReader(new InputStreamReader(System.in));
+
+    public static void main(String[] args) throws Exception {
+
+        setTerminalRawMode();
+        Runtime.getRuntime().addShutdownHook(new Thread(Main::restoreTerminal));
+
+        String currentDir = System.getProperty("user.dir");
+
+        while (true) {
+
+            String input = readLineWithAutocomplete();
+            if (input == null) break;
+            if (input.isEmpty()) continue;
+
+            List<String> tokens = parseInput(input);
+            if (tokens.isEmpty()) continue;
+
+            // ---------------- REDIRECTION ----------------
+
+            String stdoutFile = null;
+            String stderrFile = null;
+            boolean appendStdout = false;
+            boolean appendStderr = false;
+
+            List<String> commandArgs = new ArrayList<>();
+
+            for (int i = 0; i < tokens.size(); i++) {
+                String t = tokens.get(i);
+
+                switch (t) {
+                    case ">", "1>":
+                        stdoutFile = tokens.get(++i);
+                        appendStdout = false;
+                        break;
+                    case ">>", "1>>":
+                        stdoutFile = tokens.get(++i);
+                        appendStdout = true;
+                        break;
+                    case "2>":
+                        stderrFile = tokens.get(++i);
+                        appendStderr = false;
+                        break;
+                    case "2>>":
+                        stderrFile = tokens.get(++i);
+                        appendStderr = true;
+                        break;
+                    default:
+                        commandArgs.add(t);
+                }
+            }
+
+            if (commandArgs.isEmpty()) continue;
+
+            String command = commandArgs.get(0);
+            List<String> argsList = commandArgs.subList(1, commandArgs.size());
+            String joinedArgs = String.join(" ", argsList);
+
+            // ---------------- BUILTINS ----------------
+
+            if (command.equals("exit")) {
+                break;
+            } else if (command.equals("echo")) {
+                handleEcho(joinedArgs, stdoutFile, appendStdout, stderrFile);
+            } else if (command.equals("pwd")) {
+                System.out.println(currentDir);
+            } else if (command.equals("type")) {
+                System.out.println(checkType(joinedArgs));
+            } else if (command.equals("cd")) {
+                currentDir = handleCd(argsList, currentDir);
+            }
+
+            // ---------------- EXTERNAL COMMAND ----------------
+
+            else {
+                try {
+
+                    ProcessBuilder pb = new ProcessBuilder(commandArgs);
+                    pb.directory(new File(currentDir));
+                    pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+
+                    // stdout
+                    if (stdoutFile != null) {
+                        File out = new File(stdoutFile);
+                        if (appendStdout) pb.redirectOutput(ProcessBuilder.Redirect.appendTo(out));
+                        else pb.redirectOutput(out);
+                    } else {
+                        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    // stderr
+                    if (stderrFile != null) {
+                        File err = new File(stderrFile);
+                        if (appendStderr) pb.redirectError(ProcessBuilder.Redirect.appendTo(err));
+                        else pb.redirectError(err);
+                    } else {
+                        pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                    }
+
+                    pb.start().waitFor();
+
+                } catch (IOException e) {
+                    System.out.println(command + ": command not found");
+                }
+            }
+        }
+
+        restoreTerminal();
+    }
+
+    // ---------------- RAW INPUT WITH AUTOCOMPLETE ----------------
+
+    private static String readLineWithAutocomplete() throws IOException {
+
+        StringBuilder buffer = new StringBuilder();
+        print("$ ");
+
+        while (true) {
+
+            int r = reader.read();
+            if (r == -1) return null;
+
+            char c = (char) r;
+
+            if (c == '\r' || c == '\n') {
+                System.out.print("\r\n");
+                return buffer.toString().trim();
+            } else if (c == '\t') {
+                handleAutocomplete(buffer);
+            } else if (c == 127) { // backspace
+                if (buffer.length() > 0) {
+                    buffer.deleteCharAt(buffer.length() - 1);
+                    redraw(buffer);
+                }
+            } else {
+                buffer.append(c);
+                System.out.print(c);
+                System.out.flush();
+            }
+        }
+    }
+
+    private static void handleAutocomplete(StringBuilder buffer) {
+
+        String current = buffer.toString();
+
+        List<String> matches = new ArrayList<>();
+        for (String cmd : BUILTINS) {
+            if (cmd.startsWith(current)) {
+                matches.add(cmd);
+            }
+        }
+
+        if (matches.size() == 1) {
+            buffer.setLength(0);
+            buffer.append(matches.get(0)).append(" ");
+            redraw(buffer);
+        }
+    }
+
+    private static void redraw(StringBuilder buffer) {
+        print("$ " + buffer.toString() + " ");
+        print("$ " + buffer.toString());
+    }
+
+    private static void print(String msg) {
+        System.out.print("\r" + msg);
+        System.out.flush();
+    }
+
+    // ---------------- TERMINAL CONTROL ----------------
+
+    private static void setTerminalRawMode() {
+        try {
+            Process p =
+                    new ProcessBuilder("/bin/sh", "-c", "stty -icanon -echo min 1 time 0")
+                            .redirectInput(ProcessBuilder.Redirect.INHERIT)
+                            .start();
+            p.waitFor();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void restoreTerminal() {
+        try {
+            Process p =
+                    new ProcessBuilder("/bin/sh", "-c", "stty sane")
+                            .redirectInput(ProcessBuilder.Redirect.INHERIT)
+                            .start();
+            p.waitFor();
+        } catch (Exception ignored) {
+        }
+    }
+
+    // ---------------- BUILTIN HELPERS ----------------
+
+    private static void handleEcho(
+            String text, String stdoutFile, boolean append, String stderrFile) throws IOException {
+
+        if (stdoutFile != null) {
+            try (FileWriter fw = new FileWriter(stdoutFile, append)) {
+                fw.write(text + System.lineSeparator());
+            }
+        } else {
+            System.out.println(text);
+        }
+
+        if (stderrFile != null) {
+            new FileWriter(stderrFile, false).close();
+        }
+    }
+
+    private static String handleCd(List<String> args, String currentDir) throws IOException {
+
+        String target = args.isEmpty() ? System.getenv("HOME") : args.get(0);
+        String home = System.getenv("HOME");
+
+        if (target.equals("~")) {
+            target = home;
+        } else if (target.startsWith("~" + File.separator)) {
+            target = home + target.substring(1);
+        }
+
+        File dir = new File(target);
+        if (!dir.isAbsolute()) {
+            dir = new File(currentDir, target);
+        }
+
+        if (dir.exists() && dir.isDirectory()) {
+            return dir.getCanonicalPath();
+        } else {
+            System.out.println("cd: " + target + ": No such file or directory");
+            return currentDir;
+        }
+    }
+
+    private static String checkType(String command) {
+
+        if (BUILTINS.contains(command)) {
+            return command + " is a shell builtin";
+        }
+
+        String path = System.getenv("PATH");
+        if (path == null) return command + ": not found";
+
+        for (String dir : path.split(File.pathSeparator)) {
+            File file = new File(dir, command);
+            if (file.exists() && file.canExecute()) {
+                return command + " is " + file.getAbsolutePath();
+            }
+        }
+
+        return command + ": not found";
+    }
+
+    // ---------------- PARSER WITH QUOTES ----------------
+
+    private static List<String> parseInput(String input) {
+
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
+
+        boolean singleQuote = false;
+        boolean doubleQuote = false;
+        boolean escape = false;
 
         for (int i = 0; i < input.length(); i++) {
             char ch = input.charAt(i);
 
-            if (!inSingleQuote && !inDoubleQuote && ch == '\\') {
-                if (i + 1 < input.length()) {
-                    current.append(input.charAt(i + 1));
-                    i++;
-                }
-                continue;
-            }
-
-            if (inDoubleQuote && ch == '\\') {
-                if (i + 1 < input.length()) {
-                    char next = input.charAt(i + 1);
-                    if (next == '"' || next == '\\') {
-                        current.append(next);
-                        i++;
-                        continue;
-                    }
-                }
+            if (escape) {
                 current.append(ch);
+                escape = false;
                 continue;
             }
 
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
+            if (ch == '\\' && !singleQuote) {
+                escape = true;
                 continue;
             }
 
-            if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
+            if (ch == '\'' && !doubleQuote) {
+                singleQuote = !singleQuote;
                 continue;
             }
 
-            if (!inSingleQuote && !inDoubleQuote && ch == '>') {
-                boolean isAppend = (i + 1 < input.length() && input.charAt(i + 1) == '>');
-
-                if (current.toString().equals("1")) {
-                    current.setLength(0);
-                    tokens.add(isAppend ? "1>>" : "1>");
-                    if (isAppend) i++;
-                    continue;
-                }
-
-                if (current.toString().equals("2")) {
-                    current.setLength(0);
-                    tokens.add(isAppend ? "2>>" : "2>");
-                    if (isAppend) i++;
-                    continue;
-                }
-
-                if (current.length() > 0) {
-                    tokens.add(current.toString());
-                    current.setLength(0);
-                }
-
-                tokens.add(isAppend ? ">>" : ">");
-                if (isAppend) i++;
+            if (ch == '"' && !singleQuote) {
+                doubleQuote = !doubleQuote;
                 continue;
             }
 
-            if (Character.isWhitespace(ch) && !inSingleQuote && !inDoubleQuote) {
+            if (Character.isWhitespace(ch) && !singleQuote && !doubleQuote) {
                 if (current.length() > 0) {
                     tokens.add(current.toString());
                     current.setLength(0);
@@ -85,406 +312,5 @@ public class Main {
         }
 
         return tokens;
-    }
-
-    private static final String[] BUILTIN_COMMANDS = { "echo", "exit" };
-
-    private static void enableRawMode() throws IOException, InterruptedException {
-        new ProcessBuilder("/bin/sh", "-c", "stty -icanon -echo min 1 time 0 </dev/tty")
-                .inheritIO().start().waitFor();
-    }
-
-    private static void disableRawMode() throws IOException, InterruptedException {
-        new ProcessBuilder("/bin/sh", "-c", "stty sane </dev/tty")
-                .inheritIO().start().waitFor();
-    }
-
-    private static String findCompletion(String partial) {
-        if (partial.isEmpty()) {
-            return null;
-        }
-        for (String cmd : BUILTIN_COMMANDS) {
-            if (cmd.startsWith(partial)) {
-                return cmd;
-            }
-        }
-        return null;
-    }
-
-    private static String readLineWithTabCompletion(InputStream in) throws IOException {
-        StringBuilder line = new StringBuilder();
-
-        while (true) {
-            int b = in.read();
-
-            if (b == -1) {
-                // EOF
-                if (line.length() == 0) {
-                    return null;
-                }
-                return line.toString();
-            }
-
-            char ch = (char) b;
-
-            if (ch == '\t') {
-                String completion = findCompletion(line.toString());
-                if (completion != null) {
-                    // Only print the remaining suffix + trailing space.
-                    // Avoid backspace sequences: the test harness reads raw
-                    // output as text, not a rendered terminal screen, so
-                    // "\b" sequences don't erase anything for it.
-                    String suffix = completion.substring(line.length());
-                    line.append(suffix).append(' ');
-                    System.out.print(suffix + " ");
-                    System.out.flush();
-                }
-                // If no match, ignore the tab (no bell/no-op)
-                continue;
-            }
-
-            if (ch == '\r' || ch == '\n') {
-                System.out.print("\r\n");
-                System.out.flush();
-                return line.toString();
-            }
-
-            if (ch == 127 || ch == '\b') {
-                // Backspace/Delete
-                if (line.length() > 0) {
-                    line.deleteCharAt(line.length() - 1);
-                    System.out.print("\b \b");
-                    System.out.flush();
-                }
-                continue;
-            }
-
-            if (ch == 3) {
-                // Ctrl+C
-                System.out.print("^C\r\n");
-                System.out.flush();
-                line.setLength(0);
-                continue;
-            }
-
-            line.append(ch);
-            System.out.print(ch);
-            System.out.flush();
-        }
-    }
-
-    public static void main(String[] args) throws Exception {
-        File currentDirectory = new File(System.getProperty("user.dir"));
-
-        boolean rawModeEnabled = false;
-        try {
-            enableRawMode();
-            rawModeEnabled = true;
-        } catch (Exception e) {
-            // No TTY available (e.g. piped input/tests); fall back to line-based reading
-        }
-
-        Scanner fallbackScanner = rawModeEnabled ? null : new Scanner(System.in);
-
-        try {
-            while (true) {
-                System.out.print("$ ");
-                System.out.flush();
-
-                String command;
-                if (rawModeEnabled) {
-                    command = readLineWithTabCompletion(System.in);
-                    if (command == null) {
-                        break;
-                    }
-                } else {
-                    if (!fallbackScanner.hasNextLine()) {
-                        break;
-                    }
-                    command = fallbackScanner.nextLine();
-                }
-
-            if (command.equals("exit") || command.equals("exit 0")) {
-                break;
-            }
-
-            else if (command.equals("pwd")) {
-                System.out.println(currentDirectory.getAbsolutePath());
-            }
-
-            else if (command.startsWith("cd ")) {
-                String path = command.substring(3);
-
-                if (path.equals("~")) {
-                    path = System.getenv("HOME");
-                }
-
-                File target;
-                if (path.startsWith("/")) {
-                    target = new File(path);
-                } else {
-                    target = new File(currentDirectory, path);
-                }
-
-                target = target.getCanonicalFile();
-
-                if (target.exists() && target.isDirectory()) {
-                    currentDirectory = target;
-                } else {
-                    System.out.println("cd: " + path + ": No such file or directory");
-                }
-            }
-
-            else if (command.startsWith("echo")) {
-                List<String> tokens = parseCommand(command);
-                StringBuilder output = new StringBuilder();
-                String outputFile = null;
-                String errorFile = null;
-                boolean appendOut = false;
-                boolean appendErr = false;
-                int redirectIndex = tokens.size();
-
-                for (int i = 1; i < tokens.size(); i++) {
-                    String tok = tokens.get(i);
-                    if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")
-                            || tok.equals("2>") || tok.equals("2>>")) {
-                        redirectIndex = i;
-                        break;
-                    }
-                }
-
-                // Scan all redirect tokens after redirectIndex (handles stdout and stderr together)
-                for (int i = redirectIndex; i < tokens.size(); i++) {
-                    String tok = tokens.get(i);
-                    if ((tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>"))
-                            && i + 1 < tokens.size()) {
-                        outputFile = tokens.get(i + 1);
-                        appendOut = tok.equals(">>") || tok.equals("1>>");
-                        i++;
-                    } else if ((tok.equals("2>") || tok.equals("2>>")) && i + 1 < tokens.size()) {
-                        errorFile = tokens.get(i + 1);
-                        appendErr = tok.equals("2>>");
-                        i++;
-                    }
-                }
-
-                for (int i = 1; i < redirectIndex; i++) {
-                    if (i > 1) {
-                        output.append(" ");
-                    }
-                    output.append(tokens.get(i));
-                }
-
-                // Handle stdout: either print to terminal or write to file
-                if (outputFile == null) {
-                    System.out.println(output);
-                } else {
-                    File outFile;
-                    if (new File(outputFile).isAbsolute()) {
-                        outFile = new File(outputFile);
-                    } else {
-                        outFile = new File(currentDirectory, outputFile);
-                    }
-
-                    File parent = outFile.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
-
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, appendOut))) {
-                        writer.write(output.toString());
-                        writer.newLine();
-                    } catch (IOException e) {
-                        System.out.println("echo: " + e.getMessage());
-                    }
-                }
-
-                // Handle stderr redirect: echo never writes to stderr,
-                // but the target file must still be created (or left untouched if appending).
-                if (errorFile != null) {
-                    File errFile;
-                    if (new File(errorFile).isAbsolute()) {
-                        errFile = new File(errorFile);
-                    } else {
-                        errFile = new File(currentDirectory, errorFile);
-                    }
-
-                    File parent = errFile.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
-
-                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, appendErr))) {
-                        // nothing to write; echo produces no stderr output
-                    } catch (IOException e) {
-                        System.out.println("echo: " + e.getMessage());
-                    }
-                }
-            }
-
-            else if (command.startsWith("type ")) {
-                String cmd = command.substring(5);
-
-                if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")
-                        || cmd.equals("pwd") || cmd.equals("cd")) {
-                    System.out.println(cmd + " is a shell builtin");
-                } else {
-                    String path = System.getenv("PATH");
-                    String[] dirs = path.split(":");
-                    boolean found = false;
-
-                    for (String dir : dirs) {
-                        File file = new File(dir, cmd);
-                        if (file.isFile() && file.canExecute()) {
-                            System.out.println(cmd + " is " + file.getAbsolutePath());
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        System.out.println(cmd + ": not found");
-                    }
-                }
-            }
-
-            else {
-                List<String> parts = parseCommand(command);
-
-                if (parts.isEmpty()) {
-                    continue;
-                }
-
-                String outputFile = null;
-                String errorFile = null;
-                String redirectType = null;
-                boolean append = false;
-
-                for (int i = 0; i < parts.size(); i++) {
-                    String tok = parts.get(i);
-                    if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")) {
-                        if (i + 1 < parts.size()) {
-                            outputFile = parts.get(i + 1);
-                        }
-                        redirectType = "stdout";
-                        append = tok.equals(">>") || tok.equals("1>>");
-                        parts = new ArrayList<>(parts.subList(0, i));
-                        break;
-                    }
-                    if (tok.equals("2>") || tok.equals("2>>")) {
-                        if (i + 1 < parts.size()) {
-                            errorFile = parts.get(i + 1);
-                        }
-                        redirectType = "stderr";
-                        append = tok.equals("2>>");
-                        parts = new ArrayList<>(parts.subList(0, i));
-                        break;
-                    }
-                }
-
-                if (parts.isEmpty()) {
-                    continue;
-                }
-
-                String cmd = parts.get(0);
-                String path = System.getenv("PATH");
-                String[] dirs = path.split(":");
-                File executable = null;
-
-                for (String dir : dirs) {
-                    File file = new File(dir, cmd);
-                    if (file.isFile() && file.canExecute()) {
-                        executable = file;
-                        break;
-                    }
-                }
-
-                if (executable == null) {
-                    System.out.println(command + ": command not found");
-                    continue;
-                }
-
-                List<String> commandList = new ArrayList<>(parts);
-
-                ProcessBuilder pb = new ProcessBuilder(commandList);
-                pb.directory(currentDirectory);
-
-                Process process = pb.start();
-
-                BufferedReader stdoutReader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream()));
-                BufferedReader stderrReader = new BufferedReader(
-                        new InputStreamReader(process.getErrorStream()));
-
-                // --- stdout handling ---
-                if ("stdout".equals(redirectType)) {
-                    File outFile;
-                    if (new File(outputFile).isAbsolute()) {
-                        outFile = new File(outputFile);
-                    } else {
-                        outFile = new File(currentDirectory, outputFile);
-                    }
-
-                    File parent = outFile.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
-
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, append))) {
-                        String line;
-                        while ((line = stdoutReader.readLine()) != null) {
-                            writer.write(line);
-                            writer.newLine();
-                        }
-                    }
-                } else {
-                    String line;
-                    while ((line = stdoutReader.readLine()) != null) {
-                        System.out.println(line);
-                    }
-                }
-                stdoutReader.close();
-
-                // --- stderr handling ---
-                if ("stderr".equals(redirectType)) {
-                    File errFile;
-                    if (new File(errorFile).isAbsolute()) {
-                        errFile = new File(errorFile);
-                    } else {
-                        errFile = new File(currentDirectory, errorFile);
-                    }
-
-                    File parent = errFile.getParentFile();
-                    if (parent != null) {
-                        parent.mkdirs();
-                    }
-
-                    try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, append))) {
-                        String errLine;
-                        while ((errLine = stderrReader.readLine()) != null) {
-                            errWriter.write(errLine);
-                            errWriter.newLine();
-                        }
-                    }
-                } else {
-                    String errLine;
-                    while ((errLine = stderrReader.readLine()) != null) {
-                        System.err.println(errLine);
-                    }
-                }
-                stderrReader.close();
-
-                process.waitFor();
-            }
-            }
-        } finally {
-            if (rawModeEnabled) {
-                try {
-                    disableRawMode();
-                } catch (Exception e) {
-                    // best-effort cleanup
-                }
-            }
-        }
     }
 }
