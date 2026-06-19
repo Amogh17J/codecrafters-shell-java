@@ -90,7 +90,7 @@ public class Main {
     private static final String[] BUILTIN_COMMANDS = { "echo", "exit" };
 
     private static void enableRawMode() throws IOException, InterruptedException {
-        new ProcessBuilder("/bin/sh", "-c", "stty raw -echo </dev/tty")
+        new ProcessBuilder("/bin/sh", "-c", "stty -icanon -echo min 1 time 0 </dev/tty")
                 .inheritIO().start().waitFor();
     }
 
