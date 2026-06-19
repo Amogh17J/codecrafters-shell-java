@@ -43,10 +43,39 @@ public class Main {
                 continue;
             }
 
-            if (!inSingleQuote && !inDoubleQuote && ch == '>') {
+            if (!inSingleQuote
+        && !inDoubleQuote
+        && ch == '>') {
+
+    if (current.toString().equals("1")) {
+        current.setLength(0);
+        tokens.add("1>");
+        continue;
+    }
+
+    if (current.toString().equals("2")) {
+        current.setLength(0);
+        tokens.add("2>");
+        continue;
+    }
+
+    if (current.length() > 0) {
+        tokens.add(current.toString());
+        current.setLength(0);
+    }
+
+    tokens.add(">");
+
+    continue;
+}
                 if (current.toString().equals("1")) {
                     current.setLength(0);
                     tokens.add("1>");
+                    continue;
+                }
+                if (current.toString().equals("2")) {
+                    current.setLength(0);
+                    tokens.add("2>");
                     continue;
                 }
 
@@ -118,6 +147,7 @@ public class Main {
                 List<String> tokens = parseCommand(command);
                 StringBuilder output = new StringBuilder();
                 String outputFile = null;
+                String errorFile = null;
 
                 for (int i = 1; i < tokens.size(); i++) {
                     if (tokens.get(i).equals(">") || tokens.get(i).equals("1>")) {
@@ -197,11 +227,42 @@ public class Main {
                 }
 
                 String outputFile = null;
+                String errorFile = null;
+                String redirectType = null;
+                
                 for (int i = 0; i < parts.size(); i++) {
-                    if (parts.get(i).equals(">") || parts.get(i).equals("1>")) {
+                    if (parts.get(i).equals(">") ||
+    parts.get(i).equals("1>")) {
+
+    if (i + 1 < parts.size()) {
+        outputFile = parts.get(i + 1);
+    }
+
+    parts = new ArrayList<>(parts.subList(0, i));
+    break;
+}
+
+if (parts.get(i).equals("2>")) {
+
+    if (i + 1 < parts.size()) {
+        errorFile = parts.get(i + 1);
+    }
+
+    parts = new ArrayList<>(parts.subList(0, i));
+    break;
+}
                         if (i + 1 < parts.size()) {
                             outputFile = parts.get(i + 1);
                         }
+                        redirectType = "stdout";
+                        parts = new ArrayList<>(parts.subList(0, i));
+                        break;
+                    }
+                    if (parts.get(i).equals("2>")) {
+                        if (i + 1 < parts.size()) {
+                            errorFile = parts.get(i + 1);
+                        }
+                        redirectType = "stderr";
                         parts = new ArrayList<>(parts.subList(0, i));
                         break;
                     }
@@ -236,17 +297,73 @@ public class Main {
                 pb.directory(currentDirectory);
 
                 Process process = pb.start();
+                BufferedReader errReader =
+        new BufferedReader(
+                new InputStreamReader(
+                        process.getErrorStream()));
 
-                if (outputFile == null) {
+                if (redirectType == null) {
+                    // No redirection
                     BufferedReader reader = new BufferedReader(
                             new InputStreamReader(process.getInputStream()));
                     String line;
-
                     while ((line = reader.readLine()) != null) {
                         System.out.println(line);
                     }
+                    if (errorFile == null) {
+
+    String errLine;
+
+    while ((errLine = errReader.readLine()) != null) {
+        System.out.println(errLine);
+    }
+
+} else {
+
+    File errFile;
+
+    if (new File(errorFile).isAbsolute()) {
+        errFile = new File(errorFile);
+    } else {
+        errFile = new File(currentDirectory, errorFile);
+    }
+
+    File parent = errFile.getParentFile();
+
+    if (parent != null) {
+        parent.mkdirs();
+    }
+
+    BufferedWriter errWriter =
+            new BufferedWriter(
+                    new FileWriter(errFile, false));
+
+    String errLine;
+
+    boolean first = true;
+
+    while ((errLine = errReader.readLine()) != null) {
+
+        if (!first) {
+            errWriter.newLine();
+        }
+
+        errWriter.write(errLine);
+        first = false;
+    }
+
+    errWriter.close();
+}
                     reader.close();
-                } else {
+                    
+                    BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(process.getErrorStream()));
+                    while ((line = errReader.readLine()) != null) {
+                        System.err.println(line);
+                    }
+                    errReader.close();
+                } 
+                else if (redirectType.equals("stdout")) {
                     File outFile;
                     if (new File(outputFile).isAbsolute()) {
                         outFile = new File(outputFile);
@@ -277,14 +394,52 @@ public class Main {
 
                     writer.close();
                     reader.close();
-                    // Add this code after line 257:
-BufferedReader errReader = new BufferedReader(
-        new InputStreamReader(process.getErrorStream()));
-String errLine;
-while ((errLine = errReader.readLine()) != null) {
-    System.err.println(errLine);
-}
-errReader.close();
+                    
+                    BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(process.getErrorStream()));
+                    while ((line = errReader.readLine()) != null) {
+                        System.err.println(line);
+                    }
+                    errReader.close();
+                }
+                else if (redirectType.equals("stderr")) {
+                    File errFile;
+                    if (new File(errorFile).isAbsolute()) {
+                        errFile = new File(errorFile);
+                    } else {
+                        errFile = new File(currentDirectory, errorFile);
+                    }
+
+                    File parent = errFile.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+
+                    BufferedWriter errWriter = new BufferedWriter(
+                            new FileWriter(errFile, false));
+                    BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(process.getErrorStream()));
+
+                    String line;
+                    boolean first = true;
+
+                    while ((line = errReader.readLine()) != null) {
+                        if (!first) {
+                            errWriter.newLine();
+                        }
+                        errWriter.write(line);
+                        first = false;
+                    }
+
+                    errWriter.close();
+                    errReader.close();
+                    
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(process.getInputStream()));
+                    while ((line = reader.readLine()) != null) {
+                        System.out.println(line);
+                    }
+                    reader.close();
                 }
 
                 process.waitFor();
