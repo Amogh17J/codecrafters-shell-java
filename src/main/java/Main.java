@@ -79,11 +79,9 @@ public class Main {
 
                 List<String> commandList = new ArrayList<>();
 
-                commandList.add(executable.getAbsolutePath());
-
-                for (int i = 1; i < parts.length; i++) {
-                    commandList.add(parts[i]);
-                }
+for (String part : parts) {
+    commandList.add(part);
+}
 
                 ProcessBuilder pb = new ProcessBuilder(commandList);
 
