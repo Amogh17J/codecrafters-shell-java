@@ -139,21 +139,52 @@ public class Main {
                 List<String> tokens = parseCommand(command);
 
                 StringBuilder output = new StringBuilder();
+                String outputFile = null;
 
+                // Check for redirection and extract output file
                 for (int i = 1; i < tokens.size(); i++) {
+                    if (tokens.get(i).equals(">") || tokens.get(i).equals("1>")) {
+                        if (i + 1 < tokens.size()) {
+                            outputFile = tokens.get(i + 1);
+                        }
+                        break;
+                    }
+                }
 
-                    if (tokens.get(i).equals(">")) {
+                // Collect output tokens (before any redirection)
+                for (int i = 1; i < tokens.size(); i++) {
+                    if (tokens.get(i).equals(">") || tokens.get(i).equals("1>")) {
                         break;
                     }
 
                     if (i > 1) {
                         output.append(" ");
                     }
-
                     output.append(tokens.get(i));
                 }
 
-                System.out.println(output);
+                // Write to file or stdout
+                if (outputFile == null) {
+                    System.out.println(output);
+                } else {
+                    File outFile;
+                    if (new File(outputFile).isAbsolute()) {
+                        outFile = new File(outputFile);
+                    } else {
+                        outFile = new File(currentDirectory, outputFile);
+                    }
+
+                    File parent = outFile.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, false))) {
+                        writer.write(output.toString());
+                    } catch (IOException e) {
+                        System.out.println("echo: " + e.getMessage());
+                    }
+                }
             }
 
             else if (command.startsWith("type ")) {
@@ -278,21 +309,21 @@ public class Main {
 
                     File outFile;
 
-if (new File(outputFile).isAbsolute()) {
-    outFile = new File(outputFile);
-} else {
-    outFile = new File(currentDirectory, outputFile);
-}
+                    if (new File(outputFile).isAbsolute()) {
+                        outFile = new File(outputFile);
+                    } else {
+                        outFile = new File(currentDirectory, outputFile);
+                    }
 
-File parent = outFile.getParentFile();
+                    File parent = outFile.getParentFile();
 
-if (parent != null) {
-    parent.mkdirs();
-}
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
 
-BufferedWriter writer =
-        new BufferedWriter(
-                new FileWriter(outFile, false));
+                    BufferedWriter writer =
+                            new BufferedWriter(
+                                    new FileWriter(outFile, false));
 
                     BufferedReader reader =
                             new BufferedReader(
