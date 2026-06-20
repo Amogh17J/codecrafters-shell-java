@@ -26,17 +26,25 @@ public class Main {
         for (int i = 0; i < totalJobs; i++) {
             Job j = jobList.get(i);
             if (!j.process.isAlive()) {
-                String marker = " ";
-                if (i == totalJobs - 1) {
-                    marker = "+";
-                } else if (i == totalJobs - 2) {
-                    marker = "-";
-                }
-                String statusField = String.format("%-24s", "Done");
-                System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd);
                 doneJobs.add(j);
             }
         }
+
+        for (Job j : doneJobs) {
+            int currentRunningCount = jobList.size();
+            int indexInList = jobList.indexOf(j);
+            
+            String marker = " ";
+            if (indexInList == currentRunningCount - 1) {
+                marker = "+";
+            } else if (indexInList == currentRunningCount - 2) {
+                marker = "-";
+            }
+            
+            String statusField = String.format("%-24s", "Done");
+            System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd);
+        }
+        
         jobList.removeAll(doneJobs);
     }
 
