@@ -8,11 +8,13 @@ public class Main {
         int pid;
         String cmd;
         Process process;
+        boolean reportedDone;
         Job(int id, int pid, String cmd, Process process) {
             this.id = id;
             this.pid = pid;
             this.cmd = cmd;
             this.process = process;
+            this.reportedDone = false;
         }
     }
 
@@ -20,32 +22,24 @@ public class Main {
     private static int nextJobId = 1;
 
     private static void reapJobs() {
-        int totalJobs = jobList.size();
-        List<Job> doneJobs = new ArrayList<>();
-
-        for (int i = 0; i < totalJobs; i++) {
+        List<Job> toRemove = new ArrayList<>();
+        int currentSize = jobList.size();
+        for (int i = 0; i < currentSize; i++) {
             Job j = jobList.get(i);
-            if (!j.process.isAlive()) {
-                doneJobs.add(j);
+            if (!j.process.isAlive() && !j.reportedDone) {
+                String marker = " ";
+                if (i == currentSize - 1) {
+                    marker = "+";
+                } else if (i == currentSize - 2) {
+                    marker = "-";
+                }
+                String statusField = String.format("%-24s", "Done");
+                System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd);
+                j.reportedDone = true;
+                toRemove.add(j);
             }
         }
-
-        for (Job j : doneJobs) {
-            int currentRunningCount = jobList.size();
-            int indexInList = jobList.indexOf(j);
-            
-            String marker = " ";
-            if (indexInList == currentRunningCount - 1) {
-                marker = "+";
-            } else if (indexInList == currentRunningCount - 2) {
-                marker = "-";
-            }
-            
-            String statusField = String.format("%-24s", "Done");
-            System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd);
-        }
-        
-        jobList.removeAll(doneJobs);
+        jobList.removeAll(toRemove);
     }
 
     private static List<String> parseCommand(String input) {
@@ -275,7 +269,7 @@ public class Main {
                 }
 
                 else if (cmd.equals("jobs")) {
-                    reapJobs();
+                    List<Job> toRemove = new ArrayList<>();
                     int totalJobs = jobList.size();
                     for (int i = 0; i < totalJobs; i++) {
                         Job j = jobList.get(i);
@@ -285,9 +279,17 @@ public class Main {
                         } else if (i == totalJobs - 2) {
                             marker = "-";
                         }
-                        String statusField = String.format("%-24s", "Running");
-                        System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd + " &");
+
+                        if (j.process.isAlive()) {
+                            String statusField = String.format("%-24s", "Running");
+                            System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd + " &");
+                        } else {
+                            String statusField = String.format("%-24s", "Done");
+                            System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd);
+                            toRemove.add(j);
+                        }
                     }
+                    jobList.removeAll(toRemove);
                     continue;
                 }
 
