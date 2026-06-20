@@ -185,37 +185,54 @@ public class Main {
                 System.out.print("$ ");
                 System.out.flush();
 
-                String command;
+                String commandLine;
                 if (rawModeEnabled) {
-                    command = readLineWithTabCompletion(System.in);
-                    if (command == null) {
+                    commandLine = readLineWithTabCompletion(System.in);
+                    if (commandLine == null) {
                         break;
                     }
                 } else {
                     if (!fallbackScanner.hasNextLine()) {
                         break;
                     }
-                    command = fallbackScanner.nextLine();
+                    commandLine = fallbackScanner.nextLine();
                 }
 
-                if (command.trim().isEmpty()) {
+                if (commandLine.trim().isEmpty()) {
                     continue;
                 }
 
-                if (command.equals("exit") || command.equals("exit 0")) {
+                List<String> parts = parseCommand(commandLine);
+                if (parts.isEmpty()) {
+                    continue;
+                }
+
+                boolean isBackground = false;
+                if (parts.get(parts.size() - 1).equals("&")) {
+                    isBackground = true;
+                    parts.remove(parts.size() - 1);
+                }
+
+                if (parts.isEmpty()) {
+                    continue;
+                }
+
+                String cmd = parts.get(0);
+
+                if (cmd.equals("exit")) {
                     break;
                 }
 
-                else if (command.equals("pwd")) {
+                else if (cmd.equals("pwd")) {
                     System.out.println(currentDirectory.getAbsolutePath());
                 }
 
-                else if (command.equals("jobs")) {
+                else if (cmd.equals("jobs")) {
                     continue;
                 }
 
-                else if (command.startsWith("cd ")) {
-                    String path = command.substring(3);
+                else if (cmd.equals("cd")) {
+                    String path = parts.size() > 1 ? parts.get(1) : "~";
 
                     if (path.equals("~")) {
                         path = System.getenv("HOME");
@@ -237,17 +254,16 @@ public class Main {
                     }
                 }
 
-                else if (command.startsWith("echo")) {
-                    List<String> tokens = parseCommand(command);
+                else if (cmd.equals("echo")) {
                     StringBuilder output = new StringBuilder();
                     String outputFile = null;
                     String errorFile = null;
                     boolean appendOut = false;
                     boolean appendErr = false;
-                    int redirectIndex = tokens.size();
+                    int redirectIndex = parts.size();
 
-                    for (int i = 1; i < tokens.size(); i++) {
-                        String tok = tokens.get(i);
+                    for (int i = 1; i < parts.size(); i++) {
+                        String tok = parts.get(i);
                         if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")
                                 || tok.equals("2>") || tok.equals("2>>")) {
                             redirectIndex = i;
@@ -255,15 +271,15 @@ public class Main {
                         }
                     }
 
-                    for (int i = redirectIndex; i < tokens.size(); i++) {
-                        String tok = tokens.get(i);
+                    for (int i = redirectIndex; i < parts.size(); i++) {
+                        String tok = parts.get(i);
                         if ((tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>"))
-                                && i + 1 < tokens.size()) {
-                            outputFile = tokens.get(i + 1);
+                                && i + 1 < parts.size()) {
+                            outputFile = parts.get(i + 1);
                             appendOut = tok.equals(">>") || tok.equals("1>>");
                             i++;
-                        } else if ((tok.equals("2>") || tok.equals("2>>")) && i + 1 < tokens.size()) {
-                            errorFile = tokens.get(i + 1);
+                        } else if ((tok.equals("2>") || tok.equals("2>>")) && i + 1 < parts.size()) {
+                            errorFile = parts.get(i + 1);
                             appendErr = tok.equals("2>>");
                             i++;
                         }
@@ -273,7 +289,7 @@ public class Main {
                         if (i > 1) {
                             output.append(" ");
                         }
-                        output.append(tokens.get(i));
+                        output.append(parts.get(i));
                     }
 
                     if (outputFile == null) {
@@ -319,82 +335,76 @@ public class Main {
                     }
                 }
 
-                else if (command.startsWith("type ")) {
-                    String cmd = command.substring(5);
+                else if (cmd.equals("type")) {
+                    if (parts.size() < 2) {
+                        continue;
+                    }
+                    String targetCmd = parts.get(1);
 
-                    if (cmd.equals("echo") || cmd.equals("exit") || cmd.equals("type")
-                            || cmd.equals("pwd") || cmd.equals("cd") || cmd.equals("jobs")) {
-                        System.out.println(cmd + " is a shell builtin");
+                    if (targetCmd.equals("echo") || targetCmd.equals("exit") || targetCmd.equals("type")
+                            || targetCmd.equals("pwd") || targetCmd.equals("cd") || targetCmd.equals("jobs")) {
+                        System.out.println(targetCmd + " is a shell builtin");
                     } else {
-                        String path = System.getenv("PATH");
-                        String[] dirs = path.split(":");
+                        String pathEnv = System.getenv("PATH");
+                        String[] dirs = pathEnv.split(":");
                         boolean found = false;
 
                         for (String dir : dirs) {
-                            File file = new File(dir, cmd);
+                            File file = new File(dir, targetCmd);
                             if (file.isFile() && file.canExecute()) {
-                                System.out.println(cmd + " is " + file.getAbsolutePath());
+                                System.out.println(targetCmd + " is " + file.getAbsolutePath());
                                 found = true;
                                 break;
                             }
                         }
 
                         if (!found) {
-                            System.out.println(cmd + ": not found");
+                            System.out.println(targetCmd + ": not found");
                         }
                     }
                 }
 
                 else {
-                    List<String> parts = parseCommand(command);
-
-                    if (parts.isEmpty()) {
-                        continue;
-                    }
-
                     String outputFile = null;
                     String errorFile = null;
                     String redirectType = null;
                     boolean append = false;
 
-                    for (int i = 0; i < parts.size(); i++) {
-                        String tok = parts.get(i);
+                    List<String> execParts = new ArrayList<>(parts);
+
+                    for (int i = 0; i < execParts.size(); i++) {
+                        String tok = execParts.get(i);
                         if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")) {
-                            if (i + 1 < parts.size()) {
-                                outputFile = parts.get(i + 1);
+                            if (i + 1 < execParts.size()) {
+                                outputFile = execParts.get(i + 1);
                             }
                             redirectType = "stdout";
                             append = tok.equals(">>") || tok.equals("1>>");
-                            parts = new ArrayList<>(parts.subList(0, i));
+                            execParts = new ArrayList<>(execParts.subList(0, i));
                             break;
                         }
                         if (tok.equals("2>") || tok.equals("2>>")) {
-                            if (i + 1 < parts.size()) {
-                                errorFile = parts.get(i + 1);
+                            if (i + 1 < execParts.size()) {
+                                errorFile = execParts.get(i + 1);
                             }
                             redirectType = "stderr";
                             append = tok.equals("2>>");
-                            parts = new ArrayList<>(parts.subList(0, i));
+                            execParts = new ArrayList<>(execParts.subList(0, i));
                             break;
                         }
                     }
 
-                    if (parts.isEmpty()) {
+                    if (execParts.isEmpty()) {
                         continue;
                     }
 
-                    String cmd = parts.get(0);
-                    
-                    if (cmd.equals("jobs")) {
-                        continue;
-                    }
-
-                    String path = System.getenv("PATH");
-                    String[] dirs = path.split(":");
+                    String executableCmd = execParts.get(0);
+                    String pathEnv = System.getenv("PATH");
+                    String[] dirs = pathEnv.split(":");
                     File executable = null;
 
                     for (String dir : dirs) {
-                        File file = new File(dir, cmd);
+                        File file = new File(dir, executableCmd);
                         if (file.isFile() && file.canExecute()) {
                             executable = file;
                             break;
@@ -402,14 +412,23 @@ public class Main {
                     }
 
                     if (executable == null) {
-                        System.out.println(command + ": command not found");
+                        System.out.println(executableCmd + ": command not found");
                         continue;
                     }
 
-                    List<String> commandList = new ArrayList<>(parts);
-
-                    ProcessBuilder pb = new ProcessBuilder(commandList);
+                    ProcessBuilder pb = new ProcessBuilder(execParts);
                     pb.directory(currentDirectory);
+
+                    if (isBackground) {
+                        if (redirectType == null) {
+                            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+                        }
+                        Process process = pb.start();
+                        System.out.println("[1] " + process.pid());
+                        System.out.flush();
+                        continue;
+                    }
 
                     Process process = pb.start();
 
