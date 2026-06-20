@@ -87,7 +87,7 @@ public class Main {
         return tokens;
     }
 
-    private static final String[] BUILTIN_COMMANDS = { "echo", "exit", "type", "pwd", "cd", "jobs" };
+    private static final String[] BUILTINS = { "echo", "exit", "type", "pwd", "cd", "jobs" };
 
     private static void enableRawMode() throws IOException, InterruptedException {
         new ProcessBuilder("/bin/sh", "-c", "stty -icanon -echo min 1 time 0 </dev/tty")
@@ -103,7 +103,7 @@ public class Main {
         if (partial.isEmpty()) {
             return null;
         }
-        for (String cmd : BUILTIN_COMMANDS) {
+        for (String cmd : BUILTINS) {
             if (cmd.startsWith(partial)) {
                 return cmd;
             }
@@ -207,9 +207,9 @@ public class Main {
                     continue;
                 }
 
-                boolean isBackground = false;
+                boolean bgFlag = false;
                 if (parts.get(parts.size() - 1).equals("&")) {
-                    isBackground = true;
+                    bgFlag = true;
                     parts.remove(parts.size() - 1);
                 }
 
@@ -365,84 +365,83 @@ public class Main {
                 }
 
                 else {
-                    String outputFile = null;
-                    String errorFile = null;
-                    String redirectType = null;
-                    boolean append = false;
+                    String outFileStr = null;
+                    String errFileStr = null;
+                    String redirType = null;
+                    boolean appendFlag = false;
 
-                    List<String> execParts = new ArrayList<>(parts);
+                    List<String> runArgs = new ArrayList<>(parts);
 
-                    for (int i = 0; i < execParts.size(); i++) {
-                        String tok = execParts.get(i);
+                    for (int i = 0; i < runArgs.size(); i++) {
+                        String tok = runArgs.get(i);
                         if (tok.equals(">") || tok.equals("1>") || tok.equals(">>") || tok.equals("1>>")) {
-                            if (i + 1 < execParts.size()) {
-                                outputFile = execParts.get(i + 1);
+                            if (i + 1 < runArgs.size()) {
+                                outFileStr = runArgs.get(i + 1);
                             }
-                            redirectType = "stdout";
-                            append = tok.equals(">>") || tok.equals("1>>");
-                            execParts = new ArrayList<>(execParts.subList(0, i));
+                            redirType = "stdout";
+                            appendFlag = tok.equals(">>") || tok.equals("1>>");
+                            runArgs = new ArrayList<>(runArgs.subList(0, i));
                             break;
                         }
                         if (tok.equals("2>") || tok.equals("2>>")) {
-                            if (i + 1 < execParts.size()) {
-                                errorFile = execParts.get(i + 1);
+                            if (i + 1 < runArgs.size()) {
+                                errFileStr = runArgs.get(i + 1);
                             }
-                            redirectType = "stderr";
-                            append = tok.equals("2>>");
-                            execParts = new ArrayList<>(execParts.subList(0, i));
+                            redirType = "stderr";
+                            appendFlag = tok.equals("2>>");
+                            runArgs = new ArrayList<>(runArgs.subList(0, i));
                             break;
                         }
                     }
 
-                    if (execParts.isEmpty()) {
+                    if (runArgs.isEmpty()) {
                         continue;
                     }
 
-                    String executableCmd = execParts.get(0);
+                    String runCmd = runArgs.get(0);
                     String pathEnv = System.getenv("PATH");
                     String[] dirs = pathEnv.split(":");
-                    File executable = null;
+                    File exeFile = null;
 
                     for (String dir : dirs) {
-                        File file = new File(dir, executableCmd);
+                        File file = new File(dir, runCmd);
                         if (file.isFile() && file.canExecute()) {
-                            executable = file;
+                            exeFile = file;
                             break;
                         }
                     }
 
-                    if (executable == null) {
-                        System.out.println(executableCmd + ": command not found");
+                    if (exeFile == null) {
+                        System.out.println(runCmd + ": command not found");
                         continue;
                     }
 
-                    ProcessBuilder pb = new ProcessBuilder(execParts);
+                    ProcessBuilder pb = new ProcessBuilder(runArgs);
                     pb.directory(currentDirectory);
 
-                    if (isBackground) {
-                        if (redirectType == null) {
-                            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-                            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+                    if (bgFlag) {
+                        if (redirType == null) {
+                            pb.inheritIO();
                         }
-                        Process process = pb.start();
-                        System.out.println("[1] " + process.pid());
+                        Process p = pb.start();
+                        System.out.println("[1] " + p.pid());
                         System.out.flush();
                         continue;
                     }
 
-                    Process process = pb.start();
+                    Process p = pb.start();
 
-                    BufferedReader stdoutReader = new BufferedReader(
-                            new InputStreamReader(process.getInputStream()));
-                    BufferedReader stderrReader = new BufferedReader(
-                            new InputStreamReader(process.getErrorStream()));
+                    BufferedReader outRead = new BufferedReader(
+                            new InputStreamReader(p.getInputStream()));
+                    BufferedReader errRead = new BufferedReader(
+                            new InputStreamReader(p.getErrorStream()));
 
-                    if ("stdout".equals(redirectType)) {
+                    if ("stdout".equals(redirType)) {
                         File outFile;
-                        if (new File(outputFile).isAbsolute()) {
-                            outFile = new File(outputFile);
+                        if (new File(outFileStr).isAbsolute()) {
+                            outFile = new File(outFileStr);
                         } else {
-                            outFile = new File(currentDirectory, outputFile);
+                            outFile = new File(currentDirectory, outFileStr);
                         }
 
                         File parent = outFile.getParentFile();
@@ -450,27 +449,27 @@ public class Main {
                             parent.mkdirs();
                         }
 
-                        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, append))) {
+                        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outFile, appendFlag))) {
                             String line;
-                            while ((line = stdoutReader.readLine()) != null) {
+                            while ((line = outRead.readLine()) != null) {
                                 writer.write(line);
                                 writer.newLine();
                             }
                         }
                     } else {
                         String line;
-                        while ((line = stdoutReader.readLine()) != null) {
+                        while ((line = outRead.readLine()) != null) {
                             System.out.println(line);
                         }
                     }
-                    stdoutReader.close();
+                    outRead.close();
 
-                    if ("stderr".equals(redirectType)) {
+                    if ("stderr".equals(redirType)) {
                         File errFile;
-                        if (new File(errorFile).isAbsolute()) {
-                            errFile = new File(errorFile);
+                        if (new File(errFileStr).isAbsolute()) {
+                            errFile = new File(errFileStr);
                         } else {
-                            errFile = new File(currentDirectory, errorFile);
+                            errFile = new File(currentDirectory, errFileStr);
                         }
 
                         File parent = errFile.getParentFile();
@@ -478,22 +477,22 @@ public class Main {
                             parent.mkdirs();
                         }
 
-                        try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, append))) {
+                        try (BufferedWriter errWriter = new BufferedWriter(new FileWriter(errFile, appendFlag))) {
                             String errLine;
-                            while ((errLine = stderrReader.readLine()) != null) {
+                            while ((errLine = errRead.readLine()) != null) {
                                 errWriter.write(errLine);
                                 errWriter.newLine();
                             }
                         }
                     } else {
                         String errLine;
-                        while ((errLine = stderrReader.readLine()) != null) {
+                        while ((errLine = errRead.readLine()) != null) {
                             System.err.println(errLine);
                         }
                     }
-                    stderrReader.close();
+                    errRead.close();
 
-                    process.waitFor();
+                    p.waitFor();
                 }
             }
         } finally {
