@@ -19,7 +19,19 @@ public class Main {
     }
 
     private static List<Job> jobList = new ArrayList<>();
-    private static int nextJobId = 1;
+
+    private static int getAvailableJobId() {
+        if (jobList.isEmpty()) {
+            return 1;
+        }
+        int maxId = 0;
+        for (Job j : jobList) {
+            if (j.id > maxId) {
+                maxId = j.id;
+            }
+        }
+        return maxId + 1;
+    }
 
     private static void reapJobs() {
         List<Job> toRemove = new ArrayList<>();
@@ -487,12 +499,11 @@ public class Main {
                         }
                         Process p = pb.start();
                         
+                        int jobId = getAvailableJobId();
                         String fullCmdStr = String.join(" ", runArgs);
-                        jobList.add(new Job(nextJobId, (int) p.pid(), fullCmdStr, p));
-                        System.out.println("[" + nextJobId + "] " + p.pid());
+                        jobList.add(new Job(jobId, (int) p.pid(), fullCmdStr, p));
+                        System.out.println("[" + jobId + "] " + p.pid());
                         System.out.flush();
-                        
-                        nextJobId++;
                         continue;
                     }
 
