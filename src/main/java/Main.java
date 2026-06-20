@@ -3,9 +3,19 @@ import java.io.*;
 
 public class Main {
 
-    private static int bgPid = -1;
-    private static String bgCmd = "";
-    private static boolean bgActive = false;
+    static class Job {
+        int id;
+        int pid;
+        String cmd;
+        Job(int id, int pid, String cmd) {
+            this.id = id;
+            this.pid = pid;
+            this.cmd = cmd;
+        }
+    }
+
+    private static List<Job> jobList = new ArrayList<>();
+    private static int nextJobId = 1;
 
     private static List<String> parseCommand(String input) {
         List<String> tokens = new ArrayList<>();
@@ -232,9 +242,17 @@ public class Main {
                 }
 
                 else if (cmd.equals("jobs")) {
-                    if (bgActive) {
+                    int totalJobs = jobList.size();
+                    for (int i = 0; i < totalJobs; i++) {
+                        Job j = jobList.get(i);
+                        String marker = " ";
+                        if (i == totalJobs - 1) {
+                            marker = "+";
+                        } else if (i == totalJobs - 2) {
+                            marker = "-";
+                        }
                         String statusField = String.format("%-24s", "Running");
-                        System.out.println("[1]+  " + statusField + bgCmd + " &");
+                        System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd + " &");
                     }
                     continue;
                 }
@@ -433,12 +451,12 @@ public class Main {
                         }
                         Process p = pb.start();
                         
-                        bgPid = (int) p.pid();
-                        bgCmd = String.join(" ", runArgs);
-                        bgActive = true;
-
-                        System.out.println("[1] " + bgPid);
+                        String fullCmdStr = String.join(" ", runArgs);
+                        jobList.add(new Job(nextJobId, (int) p.pid(), fullCmdStr));
+                        System.out.println("[" + nextJobId + "] " + p.pid());
                         System.out.flush();
+                        
+                        nextJobId++;
                         continue;
                     }
 
