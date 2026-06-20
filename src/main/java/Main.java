@@ -3,6 +3,10 @@ import java.io.*;
 
 public class Main {
 
+    private static int bgPid = -1;
+    private static String bgCmd = "";
+    private static boolean bgActive = false;
+
     private static List<String> parseCommand(String input) {
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -228,6 +232,10 @@ public class Main {
                 }
 
                 else if (cmd.equals("jobs")) {
+                    if (bgActive) {
+                        String statusField = String.format("%-24s", "Running");
+                        System.out.println("[1]+  " + statusField + bgCmd + " &");
+                    }
                     continue;
                 }
 
@@ -424,7 +432,12 @@ public class Main {
                             pb.inheritIO();
                         }
                         Process p = pb.start();
-                        System.out.println("[1] " + p.pid());
+                        
+                        bgPid = (int) p.pid();
+                        bgCmd = String.join(" ", runArgs);
+                        bgActive = true;
+
+                        System.out.println("[1] " + bgPid);
                         System.out.flush();
                         continue;
                     }
