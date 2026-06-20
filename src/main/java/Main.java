@@ -7,10 +7,12 @@ public class Main {
         int id;
         int pid;
         String cmd;
-        Job(int id, int pid, String cmd) {
+        Process process;
+        Job(int id, int pid, String cmd, Process process) {
             this.id = id;
             this.pid = pid;
             this.cmd = cmd;
+            this.process = process;
         }
     }
 
@@ -243,6 +245,8 @@ public class Main {
 
                 else if (cmd.equals("jobs")) {
                     int totalJobs = jobList.size();
+                    List<Job> doneJobs = new ArrayList<>();
+
                     for (int i = 0; i < totalJobs; i++) {
                         Job j = jobList.get(i);
                         String marker = " ";
@@ -251,9 +255,18 @@ public class Main {
                         } else if (i == totalJobs - 2) {
                             marker = "-";
                         }
-                        String statusField = String.format("%-24s", "Running");
-                        System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd + " &");
+
+                        if (j.process.isAlive()) {
+                            String statusField = String.format("%-24s", "Running");
+                            System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd + " &");
+                        } else {
+                            String statusField = String.format("%-24s", "Done");
+                            System.out.println("[" + j.id + "]" + marker + "  " + statusField + j.cmd);
+                            doneJobs.add(j);
+                        }
                     }
+
+                    jobList.removeAll(doneJobs);
                     continue;
                 }
 
@@ -452,7 +465,7 @@ public class Main {
                         Process p = pb.start();
                         
                         String fullCmdStr = String.join(" ", runArgs);
-                        jobList.add(new Job(nextJobId, (int) p.pid(), fullCmdStr));
+                        jobList.add(new Job(nextJobId, (int) p.pid(), fullCmdStr, p));
                         System.out.println("[" + nextJobId + "] " + p.pid());
                         System.out.flush();
                         
