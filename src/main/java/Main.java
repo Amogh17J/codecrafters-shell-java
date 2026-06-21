@@ -270,6 +270,36 @@ public class Main {
                     continue;
                 }
 
+                int pipeIndex = parts.indexOf("|");
+                if (pipeIndex != -1) {
+                    List<String> list1 = new ArrayList<>(parts.subList(0, pipeIndex));
+                    List<String> list2 = new ArrayList<>(parts.subList(pipeIndex + 1, parts.size()));
+
+                    if (list1.isEmpty() || list2.isEmpty()) {
+                        continue;
+                    }
+
+                    ProcessBuilder builder1 = new ProcessBuilder(list1).directory(currentDirectory);
+                    ProcessBuilder builder2 = new ProcessBuilder(list2).directory(currentDirectory);
+                    
+                    builder2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                    builder2.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+                    List<Process> pipeline = ProcessBuilder.startPipeline(Arrays.asList(builder1, builder2));
+                    Process lastP = pipeline.get(pipeline.size() - 1);
+
+                    if (bgFlag) {
+                        int jobId = getAvailableJobId();
+                        String fullCmdStr = String.join(" ", parts);
+                        jobList.add(new Job(jobId, (int) lastP.pid(), fullCmdStr, lastP));
+                        System.out.println("[" + jobId + "] " + lastP.pid());
+                        System.out.flush();
+                    } else {
+                        lastP.waitFor();
+                    }
+                    continue;
+                }
+
                 String cmd = parts.get(0);
 
                 if (cmd.equals("exit")) {
