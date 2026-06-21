@@ -316,99 +316,119 @@ public class Main {
                     continue;
                 }
 
-                int pipeIndex = parts.indexOf("|");
-                if (pipeIndex != -1) {
-                    List<String> list1 = new ArrayList<>(parts.subList(0, pipeIndex));
-                    List<String> list2 = new ArrayList<>(parts.subList(pipeIndex + 1, parts.size()));
+                if (parts.contains("|")) {
+                    List<List<String>> cmdStages = new ArrayList<>();
+                    List<String> currentStage = new ArrayList<>();
 
-                    if (list1.isEmpty() || list2.isEmpty()) {
-                        continue;
-                    }
-
-                    boolean b1 = false;
-                    for (String b : BUILTINS) {
-                        if (b.equals(list1.get(0))) b1 = true;
-                    }
-
-                    boolean b2 = false;
-                    for (String b : BUILTINS) {
-                        if (b.equals(list2.get(0))) b2 = true;
-                    }
-
-                    if (b1 && !b2) {
-                        PipedOutputStream po = new PipedOutputStream();
-                        PipedInputStream pi = new PipedInputStream(po);
-                        PrintStream ps = new PrintStream(po);
-
-                        ProcessBuilder builder2 = new ProcessBuilder(list2).directory(currentDirectory);
-                        builder2.redirectInput(ProcessBuilder.Redirect.PIPE);
-                        builder2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                        builder2.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-                        Process p2 = builder2.start();
-
-                        executeBuiltinWithStreams(list1, System.in, ps);
-                        ps.close();
-                        po.close();
-
-                        try (InputStream childIn = pi; OutputStream childOut = p2.getOutputStream()) {
-                            byte[] buffer = new byte[1024];
-                            int bytesRead;
-                            while ((bytesRead = childIn.read(buffer)) != -1) {
-                                childOut.write(buffer, 0, bytesRead);
+                    for (String s : parts) {
+                        if (s.equals("|")) {
+                            if (!currentStage.isEmpty()) {
+                                cmdStages.add(currentStage);
+                                currentStage = new ArrayList<>();
                             }
-                        } catch (IOException e) {
-                        }
-
-                        p2.getOutputStream().close();
-                        p2.waitFor();
-                    } 
-                    else if (!b1 && b2) {
-                        ProcessBuilder builder1 = new ProcessBuilder(list1).directory(currentDirectory);
-                        builder1.redirectInput(ProcessBuilder.Redirect.INHERIT);
-                        builder1.redirectOutput(ProcessBuilder.Redirect.PIPE);
-                        builder1.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-                        Process p1 = builder1.start();
-
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        PrintStream ps = new PrintStream(baos);
-
-                        try (InputStream childOut = p1.getInputStream()) {
-                            byte[] buffer = new byte[1024];
-                            int bytesRead;
-                            while ((bytesRead = childOut.read(buffer)) != -1) {
-                            }
-                        }
-
-                        p1.waitFor();
-                        executeBuiltinWithStreams(list2, System.in, System.out);
-                    }
-                    else if (b1 && b2) {
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        PrintStream ps = new PrintStream(baos);
-                        executeBuiltinWithStreams(list1, System.in, ps);
-                        executeBuiltinWithStreams(list2, System.in, System.out);
-                    }
-                    else {
-                        ProcessBuilder builder1 = new ProcessBuilder(list1).directory(currentDirectory);
-                        ProcessBuilder builder2 = new ProcessBuilder(list2).directory(currentDirectory);
-                        
-                        builder2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-                        builder2.redirectError(ProcessBuilder.Redirect.INHERIT);
-
-                        List<Process> pipeline = ProcessBuilder.startPipeline(Arrays.asList(builder1, builder2));
-                        Process lastP = pipeline.get(pipeline.size() - 1);
-
-                        if (bgFlag) {
-                            int jobId = getAvailableJobId();
-                            String fullCmdStr = String.join(" ", parts);
-                            jobList.add(new Job(jobId, (int) lastP.pid(), fullCmdStr, lastP));
-                            System.out.println("[" + jobId + "] " + lastP.pid());
-                            System.out.flush();
                         } else {
-                            lastP.waitFor();
+                            currentStage.add(s);
                         }
+                    }
+                    if (!currentStage.isEmpty()) {
+                        cmdStages.add(currentStage);
+                    }
+
+                    if (cmdStages.size() == 2) {
+                        List<String> list1 = cmdStages.get(0);
+                        List<String> list2 = cmdStages.get(1);
+
+                        boolean b1 = false;
+                        for (String b : BUILTINS) {
+                            if (b.equals(list1.get(0))) b1 = true;
+                        }
+
+                        boolean b2 = false;
+                        for (String b : BUILTINS) {
+                            if (b.equals(list2.get(0))) b2 = true;
+                        }
+
+                        if (b1 && !b2) {
+                            PipedOutputStream po = new PipedOutputStream();
+                            PipedInputStream pi = new PipedInputStream(po);
+                            PrintStream ps = new PrintStream(po);
+
+                            ProcessBuilder builder2 = new ProcessBuilder(list2).directory(currentDirectory);
+                            builder2.redirectInput(ProcessBuilder.Redirect.PIPE);
+                            builder2.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                            builder2.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+                            Process p2 = builder2.start();
+
+                            executeBuiltinWithStreams(list1, System.in, ps);
+                            ps.close();
+                            po.close();
+
+                            try (InputStream childIn = pi; OutputStream childOut = p2.getOutputStream()) {
+                                byte[] buffer = new byte[1024];
+                                int bytesRead;
+                                while ((bytesRead = childIn.read(buffer)) != -1) {
+                                    childOut.write(buffer, 0, bytesRead);
+                                }
+                            } catch (IOException e) {
+                            }
+
+                            p2.getOutputStream().close();
+                            p2.waitFor();
+                            continue;
+                        } 
+                        else if (!b1 && b2) {
+                            ProcessBuilder builder1 = new ProcessBuilder(list1).directory(currentDirectory);
+                            builder1.redirectInput(ProcessBuilder.Redirect.INHERIT);
+                            builder1.redirectOutput(ProcessBuilder.Redirect.PIPE);
+                            builder1.redirectError(ProcessBuilder.Redirect.INHERIT);
+
+                            Process p1 = builder1.start();
+
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            PrintStream ps = new PrintStream(baos);
+
+                            try (InputStream childOut = p1.getInputStream()) {
+                                byte[] buffer = new byte[1024];
+                                int bytesRead;
+                                while ((bytesRead = childOut.read(buffer)) != -1) {
+                                }
+                            }
+
+                            p1.waitFor();
+                            executeBuiltinWithStreams(list2, System.in, System.out);
+                            continue;
+                        }
+                        else if (b1 && b2) {
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            PrintStream ps = new PrintStream(baos);
+                            executeBuiltinWithStreams(list1, System.in, ps);
+                            executeBuiltinWithStreams(list2, System.in, System.out);
+                            continue;
+                        }
+                    }
+
+                    List<ProcessBuilder> builders = new ArrayList<>();
+                    for (int i = 0; i < cmdStages.size(); i++) {
+                        ProcessBuilder pb = new ProcessBuilder(cmdStages.get(i)).directory(currentDirectory);
+                        if (i == cmdStages.size() - 1) {
+                            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                        }
+                        builders.add(pb);
+                    }
+
+                    List<Process> allP = ProcessBuilder.startPipeline(builders);
+                    Process lastP = allP.get(allP.size() - 1);
+
+                    if (bgFlag) {
+                        int jobId = getAvailableJobId();
+                        String fullCmdStr = String.join(" ", parts);
+                        jobList.add(new Job(jobId, (int) lastP.pid(), fullCmdStr, lastP));
+                        System.out.println("[" + jobId + "] " + lastP.pid());
+                        System.out.flush();
+                    } else {
+                        lastP.waitFor();
                     }
                     continue;
                 }
